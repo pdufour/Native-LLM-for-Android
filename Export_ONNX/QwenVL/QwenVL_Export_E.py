@@ -6,6 +6,9 @@ from PIL import Image
 import shutil
 import gc
 import os
+import transformers
+import sys
+
 try:
     from export_config import INPUT_IMAGE_SIZE, IMAGE_RESIZE, MAX_SEQ_LENGTH, HEIGHT_FACTOR, WIDTH_FACTOR
 except:
@@ -16,15 +19,16 @@ except:
     IMAGE_RESIZE = [HEIGHT_FACTOR * 28, WIDTH_FACTOR * 28]              # 28 = self.patch_size * self.merge_size
     MAX_SEQ_LENGTH = 1024                                               # The max token length. Note, this value include the 10 tokens for system prompt and (HEIGHT_FACTOR * WIDTH_FACTOR) tokens for image prompt. Hence, only (MAX_SEQ_LENGTH - (HEIGHT_FACTOR * WIDTH_FACTOR) - 10) tokens for query + response.
 
-path = r'/home/dake/Downloads/Qwen2-VL-2B-Instruct/'                    # Set the folder path where the Qwen2-VL whole project downloaded.
+script_dir = os.path.dirname(__file__)
+path = sys.argv[1]  # Set the folder path where the Qwen2-VL whole project downloaded.
 # Replace the original "modeling_qwen2_vl.py" with the modified "modeling_qwen2_vl.py", which stored at the folder "modeling_modified".
 modified_path_E = r'./modeling_modified/part_E/modeling_qwen2_vl.py'    # The path where the modified modeling_qwen2_vl.py stored.
-onnx_model_A = r'/home/dake/Downloads/Qwen/QwenVL_A.onnx'               # Assign a path where the exported QwenVL model stored.
-onnx_model_B = r'/home/dake/Downloads/Qwen/QwenVL_B.onnx'
-onnx_model_C = r'/home/dake/Downloads/Qwen/QwenVL_C.onnx'
-onnx_model_D = r'/home/dake/Downloads/Qwen/QwenVL_D.onnx'
-onnx_model_E = r'/home/dake/Downloads/Qwen/QwenVL_E.onnx'
-transformers_qwen2_path = r'/home/dake/anaconda3/envs/python_311b/lib/python3.11/site-packages/transformers/models/qwen2_vl/modeling_qwen2_vl.py'  # The original modeling_qwen2_vl.py path which was stored in the transformers python package.
+onnx_model_A = os.path.join(script_dir, 'onnx/QwenVL_A.onnx')                                          # Assign a path where the exported QwenVL model stored.
+onnx_model_B = os.path.join(script_dir, 'onnx/QwenVL_B.onnx')
+onnx_model_C = os.path.join(script_dir, 'onnx/QwenVL_C.onnx')
+onnx_model_D = os.path.join(script_dir, 'onnx/QwenVL_D.onnx')
+onnx_model_E = os.path.join(script_dir, 'onnx/QwenVL_E.onnx')
+transformers_qwen2_path = transformers.__file__.replace('__init__.py', 'models/qwen2_vl/modeling_qwen2_vl.py')  # Dynamically get the path to the transformers package
 
 image_path = r"./psyduck.png"                                           # Test image for the exported onnx model.
 query = "Describe this image."                                          # Test query for the exported onnx model.
@@ -100,7 +104,8 @@ with torch.inference_mode():
         ],
         output_names=['max_logit_ids', 'past_key_states', 'past_value_states'],
         do_constant_folding=True,
-        opset_version=17
+        opset_version=20,
+        dynamo=False,
     )
     del model
     del hidden_states
@@ -280,4 +285,3 @@ while (num_decode < max_single_chat_length) & (history_len < max_seq_len):
         print(tokenizer.decode(token_id), end="", flush=True)
 
 print(f"\n\nText Generate Speed: {num_decode / (time.time() - end_time):.3f} token/s")
-
