@@ -140,31 +140,29 @@ with torch.inference_mode():
     embed_data = quantize_to_uint8(data, 1.0 / scale, zero_point)
 
     print('\nExport Part_A Start...')
-    # with torch.autocast('cpu', dtype=torch.float):
-        # model = model.float()  # Convert whole model to float32
+    with torch.autocast('cpu', dtype=torch.float):
+        model = model.float()  # Convert whole model to float32
 
-        # convert_layernorms_to_float32(model)
+        convert_layernorms_to_float32(model)
 
-    print(f"Model dtype: {next(model.parameters()).dtype}")
-    print(f"Input dtype: {pixel_values.dtype}")
+        print(f"Model dtype: {next(model.parameters()).dtype}")
+        print(f"Input dtype: {pixel_values.dtype}")
 
-    torch.onnx.export(
-        model,
-        (pixel_values,),
-        onnx_model_A,
-        input_names=[
-            'pixel_values'
-        ],
-        output_names=['image_embed'],
-        do_constant_folding=True,
-        opset_version=20,
-        dynamo=True,
-        verbose=True,
-    )
-    del model
-    del pixel_values
-    gc.collect()
-    print('\nExport Part_A Done!  \n\nExport Part_B Start...')
+        torch.onnx.export(
+            model,
+            (pixel_values.float(),),
+            onnx_model_A,
+            input_names=[
+                'pixel_values'
+            ],
+            output_names=['image_embed'],
+            do_constant_folding=True,
+            opset_version=20,
+            dynamo=True,
+            verbose=True,
+        )
+        del model
+        del pixel_values
 
     model = QwenVL_PartB(embed_data, scale, zero_point, hidden_size, max_seq_len)
     torch.onnx.export(
