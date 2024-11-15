@@ -1459,15 +1459,45 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel, GenerationMixin):
             pos_factor: torch.FloatTensor
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         kv_seq_len = ids_len + history_len
-        hidden_states = hidden_states[:ids_len].float()
+
+        ids_idx = ids_len.item()
+        history_idx = history_len.item()
+        kv_idx = kv_seq_len.item()
+        torch._check_is_size(ids_idx)
+        torch._check_is_size(history_idx)
+        torch._check_is_size(kv_idx)
+        torch._check(ids_idx < hidden_states.size(0))
+        torch._check(ids_idx < position_ids.size(2))
+        torch._check(history_idx < past_key_states.size(2))
+        torch._check(history_idx < past_value_states.size(2))
+        torch._check(ids_idx < self.attention_mask.size(1))
+        torch._check(kv_idx < self.attention_mask.size(2))
+
+        torch._check((kv_seq_len > 0).item())
+        torch._check(self.head_dim > 0)
+
+        # hidden_states = hidden_states[:ids_len].float()
+        hidden_states = torch.narrow(hidden_states, 0, 0, ids_idx).float()
+
+        # position_ids[:, :, 0] += pos_factor
         position_ids[:, :, 0] += pos_factor
-        position_ids = position_ids[:, :, :ids_len].float()
+
+        # position_ids = position_ids[:, :, :ids_len].float()
+        position_ids = torch.narrow(position_ids, 2, 0, ids_idx).float()
+
         cos_rotary_pos_emb, sin_rotary_pos_emb = self.rotary_emb(position_ids)
         cos_rotary_pos_emb = torch.cat([m[i % 3] for i, m in enumerate(cos_rotary_pos_emb.split(self.rope_scaling, dim=-1))], dim=-1)
         sin_rotary_pos_emb = torch.cat([m[i % 3] for i, m in enumerate(sin_rotary_pos_emb.split(self.rope_scaling, dim=-1))], dim=-1)
-        past_key_states = past_key_states[:, :, :history_len, :].float()
-        past_value_states = past_value_states[:, :, :history_len, :].float()
-        attention_mask = self.attention_mask[:, :ids_len, :kv_seq_len] * attention_mask.float()
+
+        # past_key_states = past_key_states[:, :, :history_len, :].float()
+        past_key_states = torch.narrow(past_key_states, 2, 0, history_idx).float()
+
+        # past_value_states = past_value_states[:, :, :history_len, :].float()
+        past_value_states = torch.narrow(past_value_states, 2, 0, history_idx).float()
+
+        # attention_mask = self.attention_mask[:, :ids_len, :kv_seq_len] * attention_mask.float()
+        attention_mask = torch.narrow(torch.narrow(self.attention_mask, 1, 0, ids_idx), 2, 0, kv_idx) * attention_mask.float()
+
         for i in range(self.num_layers):
             hidden_states, self.save_key[i], self.save_value[i] = self.model.layers[i](
                 hidden_states=hidden_states,
@@ -1479,7 +1509,7 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel, GenerationMixin):
                 kv_seq_len=kv_seq_len
             )
         expand_space = torch.zeros((self.num_layers, self.num_key_value_heads, self.max_seq_len - kv_seq_len, self.head_dim), dtype=torch.float16)
-        return (torch.argmax(self.lm_head(self.model.norm(hidden_states[-1]))).int(),
+        return (torch.max(self.lm_head(self.model.norm(hidden_states[-1])), dim=0)[1].int(),
                 torch.cat((torch.stack(self.save_key), expand_space), dim=-2),
                 torch.cat((torch.stack(self.save_value), expand_space), dim=-2))
 
