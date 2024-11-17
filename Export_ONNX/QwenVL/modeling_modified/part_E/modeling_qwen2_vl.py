@@ -27,6 +27,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.checkpoint
+from torch.fx.experimental.symbolic_shapes import guard_size_oblivious
 from torch.nn import CrossEntropyLoss, LayerNorm
 
 from ...activations import ACT2FN
@@ -510,7 +511,77 @@ def repeat_kv(kv_states, num_key_value_groups, num_key_value_heads_mul_groups, h
     This is the equivalent of torch.repeat_interleave(x, dim=1, repeats=n_rep). The hidden states go from (batch,
     num_key_value_heads, seqlen, head_dim) to (batch, num_attention_heads, seqlen, head_dim)
     """
-    return kv_states.unsqueeze(1).expand(-1, num_key_value_groups, -1, -1).reshape(num_key_value_heads_mul_groups, kv_seq_len, head_dim)
+
+    # # ==== mocks
+    # kv_states = torch.full((2, 10, 128), -1.0)
+    # num_key_value_groups = 6
+    # num_key_value_heads_mul_groups = 12
+    # head_dim = 128
+    # kv_seq_len = torch.tensor([10])
+    # # ==== end mocks
+
+    print('DEBUG++')
+
+    print(kv_states.shape)
+    # print(num_key_value_groups)
+    # print(num_key_value_heads_mul_groups)
+    # print(head_dim)
+    # print(kv_seq_len.item().shape)
+
+    kv_seq_len = kv_seq_len.item()
+
+    torch._check_is_size(num_key_value_groups)
+    torch._check_is_size(num_key_value_heads_mul_groups)
+    torch._check_is_size(head_dim)
+    torch._check_is_size(kv_seq_len)
+    torch._check(kv_seq_len != -1)
+
+    expanded_tensor = kv_states.unsqueeze(1)\
+        .expand(-1, num_key_value_groups, -1, -1)\
+
+    total_elements = expanded_tensor.numel()  # 2 * 6 * 10 * 128 = 15,360
+
+    torch._check(head_dim * num_key_value_heads_mul_groups > 2)
+    # print('total_elements', total_elements)
+    expected_total_elements = num_key_value_heads_mul_groups * kv_seq_len * head_dim
+    # print('expected_total_elements', expected_total_elements)
+
+
+
+    # torch._check((self.head_dim*ids_idx + self.head_dim*history_idx) != 0)
+
+    # # expected - Ne(128 * Max(1, u0 + u1), 128)
+    # torch._check(self.head_dim * max(1, ids_idx + history_idx) != self.head_dim)
+
+    # torch._check((kv_seq_len > 0).item())
+    # torch._check(self.head_dim > 0)
+
+    torch._check(
+        kv_seq_len != 0,
+    )
+    torch._check(
+        num_key_value_groups != 0,
+    )
+    torch._check(
+        num_key_value_heads_mul_groups != 0,
+    )
+    torch._check(
+        head_dim != 0,
+    )
+
+    torch._check(
+        (head_dim * num_key_value_groups + head_dim * kv_seq_len) != 0)
+
+    # Use torch._check to assert the relationship between total elements
+    torch._check(expected_total_elements == total_elements)
+
+    print()
+
+    reshaped_tensor = expanded_tensor.reshape(num_key_value_heads_mul_groups, kv_seq_len, head_dim)
+
+    print('++RESHAPED TENSOR++')
+
+    return reshaped_tensor
 
 
 class Qwen2VLAttention(nn.Module):
@@ -764,7 +835,14 @@ class Qwen2VLSdpaAttention(Qwen2VLAttention):
             past_value_states: torch.FloatTensor,
             kv_seq_len: torch.LongTensor
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        query_states, key_states, value_states = torch.split(self.qkv_proj(hidden_states),[self.num_query, self.num_key, self.num_value], dim=-1)
+        # Project hidden states to combined QKV
+        combined_qkv = self.qkv_proj(hidden_states)
+        expected_qkv_dim = self.num_query + self.num_key + self.num_value
+        # torch._check(combined_qkv.size(-1) == expected_qkv_dim)
+
+        # torch._check((hidden_states.size(0)**self.num_key_value_heads) + (hidden_states.size(1)**self.num_key_value_heads) != 0)
+
+        query_states, key_states, value_states = torch.split(combined_qkv, [self.num_query, self.num_key, self.num_value], dim=-1)
         query_states = query_states.view(-1, self.num_heads, self.head_dim).transpose(0, 1)
         key_states = key_states.view(-1, self.num_key_value_heads, self.head_dim).transpose(0, 1)
         value_states = value_states.view(-1, self.num_key_value_heads, self.head_dim).transpose(0, 1)
@@ -775,8 +853,16 @@ class Qwen2VLSdpaAttention(Qwen2VLAttention):
         save_value_states = value_states.half()
         key_states = repeat_kv(key_states, self.num_key_value_groups, self.num_key_value_heads_mul_groups, self.head_dim, kv_seq_len)
         value_states = repeat_kv(value_states, self.num_key_value_groups, self.num_key_value_heads_mul_groups, self.head_dim, kv_seq_len)
-        return self.o_proj(torch.matmul(nn.functional.softmax(torch.matmul(query_states, key_states.transpose(1, 2)) * self.head_dim_factor + attention_mask, dim=-1, dtype=torch.float32),
-                                        value_states).transpose(0, 1).contiguous().view(-1, self.hidden_size)), save_key_states, save_value_states
+
+        torch._check(self.num_key_value_heads_mul_groups*hidden_states.size(0)**self.num_key_value_heads + self.num_key_value_heads_mul_groups*hidden_states.size(0)*past_key_states.size(1) != 0)
+
+        attn_weights = torch.matmul(query_states, key_states.transpose(1, 2)) * self.head_dim_factor + attention_mask
+        logger.info('debug shapes')
+        logger.info(attn_weights.shape)
+        attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32)
+        attn_output = torch.matmul(attn_weights, value_states)
+        attn_output = attn_output.transpose(0, 1).contiguous().view(-1, self.hidden_size)
+        return self.o_proj(attn_output), save_key_states, save_value_states
 
 
 QWEN2_VL_ATTENTION_CLASSES = {
@@ -1460,9 +1546,14 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel, GenerationMixin):
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         kv_seq_len = ids_len + history_len
 
-        ids_idx = ids_len.item()
+        print('==debug')
+
+        ids_idx = torch.tensor(ids_len).item()
         history_idx = history_len.item()
         kv_idx = kv_seq_len.item()
+
+        torch._check(ids_idx > 0)
+        torch._check(ids_idx + history_idx > 1)
         torch._check_is_size(ids_idx)
         torch._check_is_size(history_idx)
         torch._check_is_size(kv_idx)
@@ -1473,8 +1564,24 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel, GenerationMixin):
         torch._check(ids_idx < self.attention_mask.size(1))
         torch._check(kv_idx < self.attention_mask.size(2))
 
+        # new guards
+        # actual - Ne(128*u0 + 128*u1, 0)
+        # u0: ids_idx
+        # u1: history_idx
+
+        # guard: Ne(0, 128*u0 + 128*u1))
+        torch._check((self.head_dim*ids_idx + self.head_dim*history_idx) != 0)
+
+        # guard: Ne(128 * Max(1, u0 + u1), 128)
+        torch._check(self.head_dim * max(1, ids_idx + history_idx) != self.head_dim)
+
+        # guard: Ne(128*Max(1, u0 + u1), 128*u0 + 128*u1)
+        torch._check(self.head_dim * max(1, ids_idx + history_idx) != self.head_dim * ids_idx + self.head_dim * history_idx)
+
         torch._check((kv_seq_len > 0).item())
         torch._check(self.head_dim > 0)
+
+        # end new guards
 
         # hidden_states = hidden_states[:ids_len].float()
         hidden_states = torch.narrow(hidden_states, 0, 0, ids_idx).float()
@@ -1509,9 +1616,16 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel, GenerationMixin):
                 kv_seq_len=kv_seq_len
             )
         expand_space = torch.zeros((self.num_layers, self.num_key_value_heads, self.max_seq_len - kv_seq_len, self.head_dim), dtype=torch.float16)
-        return (torch.max(self.lm_head(self.model.norm(hidden_states[-1])), dim=0)[1].int(),
-                torch.cat((torch.stack(self.save_key), expand_space), dim=-2),
-                torch.cat((torch.stack(self.save_value), expand_space), dim=-2))
+        logits = self.lm_head(self.model.norm(hidden_states[-1]))
+        max_logits = torch.max(logits, dim=0)[1].int()
+        save_key_stack = torch.stack(self.save_key)
+        save_value_stack = torch.stack(self.save_value)
+        expanded_save_key = torch.cat((save_key_stack, expand_space), dim=-2)
+        expanded_save_value = torch.cat((save_value_stack, expand_space), dim=-2)
+        return max_logits, expanded_save_key, expanded_save_value
+        # return (torch.max(self.lm_head(self.model.norm(hidden_states[-1])), dim=0)[1].int(),
+            # torch.cat((torch.stack(self.save_key), expand_space), dim=-2),
+            # torch.cat((torch.stack(self.save_value), expand_space), dim=-2))
 
     def prepare_inputs_for_generation(
         self,

@@ -1,6 +1,8 @@
+import sys
 import shutil
 import gc
 import torch
+import transformers
 
 try:
     from export_config import INPUT_IMAGE_SIZE, IMAGE_RESIZE, MAX_SEQ_LENGTH, WIDTH_FACTOR, HEIGHT_FACTOR
@@ -13,23 +15,49 @@ except:
     MAX_SEQ_LENGTH = 1024                                                                          # The max token length. Note, this value include the 10 tokens for system prompt and (HEIGHT_FACTOR * WIDTH_FACTOR) tokens for image prompt. Hence, only (MAX_SEQ_LENGTH - (HEIGHT_FACTOR * WIDTH_FACTOR) - 10) tokens for query + response.
 
 
-path = r'/home/dake/Downloads/Qwen2-VL-2B-Instruct/'                                               # Set the folder path where the Qwen2-VL whole project downloaded.
+import os
+
+script_dir = os.path.dirname(__file__)
+path = sys.argv[1]  # Set the folder path where the Qwen2-VL whole project downloaded.
 # Replace the original "modeling_qwen2_vl.py" with the modified "modeling_qwen2_vl.py", which stored at the folder "modeling_modified".
-modified_path_A = r'/home/dake/Downloads/QwenVL/modeling_modified/part_ABCD/modeling_qwen2_vl.py'  # The path where the modified modeling_qwen2_vl.py stored.
-onnx_model_A = r'/home/dake/Downloads/Qwen/QwenVL_A.onnx'                                          # Assign a path where the exported QwenVL model stored.
-onnx_model_B = r'/home/dake/Downloads/Qwen/QwenVL_B.onnx'
-onnx_model_C = r'/home/dake/Downloads/Qwen/QwenVL_C.onnx'
-onnx_model_D = r'/home/dake/Downloads/Qwen/QwenVL_D.onnx'
-transformers_qwen2_path = r'/home/dake/anaconda3/envs/python_311b/lib/python3.11/site-packages/transformers/models/qwen2_vl/modeling_qwen2_vl.py'  # The original modeling_qwen2_vl.py path which was stored in the transformers python package.
+modified_path_A = os.path.join(script_dir, 'modeling_modified/part_ABCD/modeling_qwen2_vl.py')  # The path where the modified modeling_qwen2_vl.py stored.
+onnx_model_A = os.path.join(script_dir, 'onnx/QwenVL_A.onnx')                                          # Assign a path where the exported QwenVL model stored.
+onnx_model_B = os.path.join(script_dir, 'onnx/QwenVL_B.onnx')
+onnx_model_C = os.path.join(script_dir, 'onnx/QwenVL_C.onnx')
+onnx_model_D = os.path.join(script_dir, 'onnx/QwenVL_D.onnx')
+
+transformers_qwen2_path = transformers.__file__.replace('__init__.py', 'models/qwen2_vl/modeling_qwen2_vl.py')  # Dynamically get the path to the transformers package
 
 shutil.copyfile(modified_path_A, transformers_qwen2_path)
 shutil.copyfile("export_config.py", transformers_qwen2_path.replace("modeling_qwen2_vl", "export_config"))
 
 from transformers import Qwen2VLForConditionalGeneration
 
+# make export directory "onnx" (clear out any existing path)
+shutil.rmtree(os.path.join(script_dir, 'onnx'), ignore_errors=True)
+os.makedirs(os.path.join(script_dir, 'onnx'))
 
 def quantize_to_uint8(tensor, scale, zero_point):
     return ((tensor - zero_point) * scale).round().clamp(0, 255).to(torch.uint8)
+
+def convert_layernorms_to_float32(module):
+    for name, child in module.named_children():
+        if isinstance(child, torch.nn.LayerNorm):
+            # Create new LayerNorm with same params but force float32
+            new_layer = torch.nn.LayerNorm(
+                child.normalized_shape,
+                eps=child.eps,
+                elementwise_affine=child.elementwise_affine
+            ).float()
+            # Copy weights if they exist
+            if child.elementwise_affine:
+                new_layer.weight.data = child.weight.data.float()
+                new_layer.bias.data = child.bias.data.float()
+            # Replace the layer
+            setattr(module, name, new_layer)
+        else:
+            # Recursive call for nested modules
+            convert_layernorms_to_float32(child)
 
 
 class QwenVL_PartB(torch.nn.Module):
@@ -80,6 +108,29 @@ class QwenVL_PartD(torch.nn.Module):
         self.position_ids[:, :, self.image_factor_plus:ids_len] = self.fill_tail_position[:, :, :ids_len - self.image_factor_plus]
         return torch.cat((part_1, image_embed, part_2, part_3), dim=0), self.position_ids
 
+def convert_module_to_float32(module):
+    """
+    Recursively converts all parameters and buffers in a module to float32.
+    """
+    for child in module.children():
+        convert_module_to_float32(child)
+
+    if hasattr(module, 'weight') and module.weight is not None:
+        module.weight.data = module.weight.data.float()
+    if hasattr(module, 'bias') and module.bias is not None:
+        module.bias.data = module.bias.data.float()
+
+    # Convert any other parameters
+    for param in module.parameters(recurse=False):
+        param.data = param.data.float()
+
+    # Convert buffers
+    for buffer_name, buffer in module.named_buffers(recurse=False):
+        if buffer is not None:
+            setattr(module, buffer_name, buffer.float())
+
+    # Set module to float32
+    module.float()
 
 # Load the model
 with torch.inference_mode():
@@ -113,21 +164,29 @@ with torch.inference_mode():
     embed_data = quantize_to_uint8(data, 1.0 / scale, zero_point)
 
     print('\nExport Part_A Start...')
+    # model = model.float()
+
+    # convert_layernorms_to_float32(model)
+    # convert_module_to_float32(model)
+
     torch.onnx.export(
         model,
-        (pixel_values,),
+        (pixel_values),
         onnx_model_A,
         input_names=[
             'pixel_values'
         ],
         output_names=['image_embed'],
         do_constant_folding=True,
-        opset_version=17
+        opset_version=20,
+        dynamo=True,
+        verbose=True,
     )
     del model
     del pixel_values
+
     gc.collect()
-    print('\nExport Part_A Done!  \n\nExport Part_B Start...')
+    print('\nExport Part_A Done! \n\nExport Part_B Start...')
 
     model = QwenVL_PartB(embed_data, scale, zero_point, hidden_size, max_seq_len)
     torch.onnx.export(
@@ -140,7 +199,9 @@ with torch.inference_mode():
         ],
         output_names=['hidden_states'],
         do_constant_folding=True,
-        opset_version=17
+        opset_version=20,
+        dynamo=False,
+        verbose=True,
     )
     del model
     del embed_data
@@ -161,7 +222,9 @@ with torch.inference_mode():
         ],
         output_names=['position_ids'],
         do_constant_folding=True,
-        opset_version=17
+        opset_version=20,
+        dynamo=False,
+        verbose=True,
     )
     del model
     del dummy
@@ -181,7 +244,7 @@ with torch.inference_mode():
         ],
         output_names=['hidden_states', 'position_ids'],
         do_constant_folding=True,
-        opset_version=17
+        opset_version=20,
+        dynamo=False
     )
     print('\nExport Part_D Done! \n\nNext, please execute the QwenVL_Export_E.py to export the last part and run the test.')
-
