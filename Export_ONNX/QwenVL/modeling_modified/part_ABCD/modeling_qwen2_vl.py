@@ -292,7 +292,7 @@ class PatchEmbed(nn.Module):
         self.embed_dim = embed_dim
 
         kernel_size = [temporal_patch_size, patch_size, patch_size]
-        self.proj = nn.Conv3d(in_channels, embed_dim, kernel_size=kernel_size, stride=kernel_size, bias=False)
+        self.proj = nn.Conv3d(in_channels, embed_dim, kernel_size=kernel_size, stride=kernel_size, bias=False).half()
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         return self.proj(hidden_states).view(-1, self.embed_dim)
@@ -1048,9 +1048,9 @@ class Qwen2VLPreTrainedModel(PreTrainedModel):
     def _init_weights(self, module):
         std = self.config.initializer_range
         if isinstance(module, (nn.Linear, nn.Conv3d)):
-            module.weight.data.normal_(mean=0.0, std=std)
+            module.weight.data.normal_(mean=0.0, std=std).to(dtype=torch.float16)
             if module.bias is not None:
-                module.bias.data.zero_()
+                module.bias.data.zero_().to(dtype=torch.float16)
         elif isinstance(module, nn.Embedding):
             module.weight.data.normal_(mean=0.0, std=std)
             if module.padding_idx is not None:
@@ -1654,6 +1654,7 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel, GenerationMixin):
             self.patch_size,
             self.patch_size
         )
+
         return self.visual(pixel_values).half()
 
     def prepare_inputs_for_generation(
