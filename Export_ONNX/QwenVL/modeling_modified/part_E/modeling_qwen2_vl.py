@@ -520,9 +520,13 @@ def repeat_kv(kv_states, num_key_value_groups, num_key_value_heads_mul_groups, h
     # kv_seq_len = torch.tensor([10])
     # # ==== end mocks
 
-    print('DEBUG++')
+    # print('DEBUG++')
 
-    print(kv_states.shape)
+    # torch._check(kv_states.size(1) > 0)
+    # torch._check(kv_states.size(1) == kv_seq_len.item())
+    # torch._check(head_dim * kv_seq_len.item() == head_dim * kv_states.size(1))
+
+    # print(kv_states.shape)
     # print(num_key_value_groups)
     # print(num_key_value_heads_mul_groups)
     # print(head_dim)
@@ -530,22 +534,24 @@ def repeat_kv(kv_states, num_key_value_groups, num_key_value_heads_mul_groups, h
 
     kv_seq_len = kv_seq_len.item()
 
-    torch._check_is_size(num_key_value_groups)
-    torch._check_is_size(num_key_value_heads_mul_groups)
-    torch._check_is_size(head_dim)
-    torch._check_is_size(kv_seq_len)
-    torch._check(kv_seq_len != -1)
+    # torch._check_is_size(num_key_value_groups)
+    # torch._check_is_size(num_key_value_heads_mul_groups)
+    # torch._check_is_size(head_dim)
+    # torch._check_is_size(kv_seq_len)
+    # torch._check(kv_seq_len != -1)
+
+    # torch._check(kv_states.size(1) >= 1)
+    # torch._check(head_dim * kv_states.size(1) == head_dim * max(1, kv_states.size(1)))
 
     expanded_tensor = kv_states.unsqueeze(1)\
         .expand(-1, num_key_value_groups, -1, -1)\
 
     total_elements = expanded_tensor.numel()  # 2 * 6 * 10 * 128 = 15,360
 
-    torch._check(head_dim * num_key_value_heads_mul_groups > 2)
+    # torch._check(head_dim * num_key_value_heads_mul_groups > 2)
     # print('total_elements', total_elements)
     expected_total_elements = num_key_value_heads_mul_groups * kv_seq_len * head_dim
     # print('expected_total_elements', expected_total_elements)
-
 
 
     # torch._check((self.head_dim*ids_idx + self.head_dim*history_idx) != 0)
@@ -556,30 +562,90 @@ def repeat_kv(kv_states, num_key_value_groups, num_key_value_heads_mul_groups, h
     # torch._check((kv_seq_len > 0).item())
     # torch._check(self.head_dim > 0)
 
-    torch._check(
-        kv_seq_len != 0,
-    )
-    torch._check(
-        num_key_value_groups != 0,
-    )
-    torch._check(
-        num_key_value_heads_mul_groups != 0,
-    )
-    torch._check(
-        head_dim != 0,
-    )
+    # torch._check(
+    #     kv_seq_len != 0,
+    # )
+    # torch._check(
+    #     num_key_value_groups != 0,
+    # )
+    # torch._check(
+    #     num_key_value_heads_mul_groups != 0,
+    # )
+    # torch._check(
+    #     head_dim != 0,
+    # )
 
-    torch._check(
-        (head_dim * num_key_value_groups + head_dim * kv_seq_len) != 0)
+
+    # torch._check((head_dim * num_key_value_groups + head_dim * kv_seq_len) != 0)
+
+    # torch._check(u0 + u1 >= 1)
+    # torch._check(kv_states.size(1) >= 1)
+    # torch._check((kv_states.size(2)*max(1, kv_states.size(1))) == kv_states.size(2)*(kv_states.size(1)))
+    # guard_size_oblivious((kv_states.size(2)*max(1, kv_states.size(1))) != kv_states.size(2)*(kv_states.size(1)))
 
     # Use torch._check to assert the relationship between total elements
-    torch._check(expected_total_elements == total_elements)
+    # torch._check(expected_total_elements == total_elements)
 
-    print()
+    # print('expanded_tensor.shape', expanded_tensor.shape)
+    # print('expanded_tensor.size(0)', expanded_tensor.size(0))
+    # print('expanded_tensor.size(1)', expanded_tensor.size(1))
+    # print('expanded_tensor.numel()', expanded_tensor.numel())
+    # print('expanded_tensor.size(2)', expanded_tensor.size(2))
+    # print('expanded_tensor.size(3)', expanded_tensor.size(3))
+    # print('expanded_tensor.size(-4)', expanded_tensor.size(-4))
+    # print('expanded_tensor.size(-3)', expanded_tensor.size(-3))
+    # print('expanded_tensor.size(-2)', expanded_tensor.size(-2))
+    # print('expanded_tensor.size(-1)', expanded_tensor.size(-1))
+    # print('kv_states.shape', kv_states.shape)
+    # print('kv_states.size(-3)', kv_states.size(-3))
+    # print('kv_states.size(-2)', kv_states.size(-2))
+    # print('kv_states.size(-1)', kv_states.size(-1))
+    # print('kv_states.size(0)', kv_states.size(0))
+    # print('kv_states.size(1)', kv_states.size(1))
+    # print('kv_states.size(2)', kv_states.size(2))
 
+
+    # guard: Ne(128*Max(1, u0 + u1), 128*u0 + 128*u1)
+    # torch._check(kv_states.size(1) > 2)
+    # if (kv_states.size(1) > 2):
+    #     torch._check(kv_states.size(1) > 2)
+    # else:
+    #     torch._check(kv_states.size(1) == 2)
+
+    # "Ne(u0 + u1 + 128, 256)
+    # torch._check(head_dim+1*max(1, kv_states.size(0), kv_states.size(1)) != head_dim*kv_states.size(0))
+    # else:
+    #     print('yes124')
+    #     torch._check(head_dim*max(1, kv_states.size(0), kv_states.size(1)) == head_dim*kv_states.size(0))
+
+
+    # torch._check(expanded_tensor.size(0) + 1 > 1)
+    # torch._check(expanded_tensor.size(1) + 2 + 2 + 3 > 4)
+
+
+    # guard: u0 + u1 > 2
+    # torch._check(kv_states.size(1) + 4 < 1)
+    # torch._check(kv_states.numel() + 4 > 1)
+    # torch._check(kv_states.size(0) + 4 > 1)
+    # torch._check(kv_states.size(1) + 4 > 1)
+
+    # print('')
+    # Ne(u0 + u1 + 2, 5)
+    # torch._check(kv_states.size(0) + kv_states.size(1) != 5)
+
+    # guard: Ne(128*Max(1, u0 + u1), 128*u0 + 128*u1)
+    # torch._check(self.head_dim * max(1, ids_idx + history_idx) != self.head_dim * ids_idx + self.head_dim * history_idx)
+
+
+    # torch._check(head_dim*max(1, kv_states.size(0), kv_states.size(1)) != head_dim*kv_states.size(0) + head_dim*kv_states.size(1))
+
+    # torch._check(self.head_dim * max(1, ids_idx + history_idx) != self.head_dim * ids_idx + self.head_dim * history_idx)
+
+
+    # torch._check((kv_states.size(2)*max(1, kv_states.size(1))) == kv_states.size(2)*(kv_states.size(1)))
     reshaped_tensor = expanded_tensor.reshape(num_key_value_heads_mul_groups, kv_seq_len, head_dim)
 
-    print('++RESHAPED TENSOR++')
+    # print('++RESHAPED TENSOR++')
 
     return reshaped_tensor
 
@@ -655,7 +721,9 @@ class Qwen2VLAttention(nn.Module):
         value_states = torch.cat((past_value_states, value_states),  dim=-2)
         save_key_states = key_states.half()
         save_value_states = value_states.half()
+        # print('repeat 1.0')
         key_states = repeat_kv(key_states, self.num_key_value_groups, self.num_key_value_heads_mul_groups, self.head_dim, kv_seq_len)
+        # print('repeat 1.1')
         value_states = repeat_kv(value_states, self.num_key_value_groups, self.num_key_value_heads_mul_groups, self.head_dim, kv_seq_len)
         return self.o_proj(torch.matmul(nn.functional.softmax(torch.matmul(query_states, key_states.transpose(1, 2)) * self.head_dim_factor, dim=-1, dtype=torch.float32),
             value_states).transpose(0, 1).contiguous().view(-1, self.hidden_size)), save_key_states, save_value_states
@@ -755,7 +823,9 @@ class Qwen2VLFlashAttention2(Qwen2VLAttention):
             key_states, value_states = past_key_value.update(key_states, value_states, self.layer_idx, cache_kwargs)
 
         # repeat k/v heads if n_kv_heads < n_heads
+        # print('repeat 2.0')
         key_states = repeat_kv(key_states, self.num_key_value_groups)
+        # print('repeat 2.1')
         value_states = repeat_kv(value_states, self.num_key_value_groups)
         dropout_rate = 0.0 if not self.training else self.attention_dropout
 
@@ -841,8 +911,16 @@ class Qwen2VLSdpaAttention(Qwen2VLAttention):
         # torch._check(combined_qkv.size(-1) == expected_qkv_dim)
 
         # torch._check((hidden_states.size(0)**self.num_key_value_heads) + (hidden_states.size(1)**self.num_key_value_heads) != 0)
+        # print('key_states', key_states.size(0))
+        # torch._check(self.head_dim * key_states.size(1) == self.head_dim * max(1, key_states.size(1)))
+        #  Ne(128*u0, 128)
+        # torch._check_is_size(combined_qkv.size(0))
+        # torch._check_is_size(combined_qkv.size(1))
+        # guard_size_oblivious(self.head_dim * max(1, combined_qkv.size(0) + combined_qkv.size(1) + 3) != self.head_dim)
 
         query_states, key_states, value_states = torch.split(combined_qkv, [self.num_query, self.num_key, self.num_value], dim=-1)
+        # torch._check(self.head_dim * key_states.size(1) == self.head_dim * max(1, key_states.size(1)))
+        # torch._check(self.head_dim * key_states.size(1) != self.head_dim)
         query_states = query_states.view(-1, self.num_heads, self.head_dim).transpose(0, 1)
         key_states = key_states.view(-1, self.num_key_value_heads, self.head_dim).transpose(0, 1)
         value_states = value_states.view(-1, self.num_key_value_heads, self.head_dim).transpose(0, 1)
@@ -851,14 +929,31 @@ class Qwen2VLSdpaAttention(Qwen2VLAttention):
         value_states = torch.cat((past_value_states, value_states), dim=-2)
         save_key_states = key_states.half()
         save_value_states = value_states.half()
+        # print('before kv')
+        # torch._check_is_size(key_states.size(1))
+        # torch._check(key_states.size(1) >= 1)
+        # torch._check(kv_seq_len.item() == key_states.size(-2))
+        # torch._check(key_states.size(-2) == past_key_states.size(-2) + hidden_states.size(0))
         key_states = repeat_kv(key_states, self.num_key_value_groups, self.num_key_value_heads_mul_groups, self.head_dim, kv_seq_len)
         value_states = repeat_kv(value_states, self.num_key_value_groups, self.num_key_value_heads_mul_groups, self.head_dim, kv_seq_len)
 
-        torch._check(self.num_key_value_heads_mul_groups*hidden_states.size(0)**self.num_key_value_heads + self.num_key_value_heads_mul_groups*hidden_states.size(0)*past_key_states.size(1) != 0)
+        # torch._check(self.num_key_value_heads_mul_groups*hidden_states.size(0)**self.num_key_value_heads + self.num_key_value_heads_mul_groups*hidden_states.size(0)*past_key_states.size(1) != 0)
 
-        attn_weights = torch.matmul(query_states, key_states.transpose(1, 2)) * self.head_dim_factor + attention_mask
-        logger.info('debug shapes')
-        logger.info(attn_weights.shape)
+
+
+        # print('query_states', query_states.shape)
+        # print('key_states.size(0).shape', key_states.shape)
+
+        # torch._check(key_states.size(2) + key_states.size(1) > 1)
+
+
+        ks_transposed = key_states.transpose(1, 2)
+        # print('query_states', query_states.shape)
+        # print('key_states.size(0).shape', key_states.shape)
+        # print('ks_transposed', ks_transposed.shape)
+        # torch._check(hidden_states.size(0)*(hidden_states.size(0) + key_states.size(1)) != 0)
+        matrix = torch.matmul(query_states, ks_transposed)
+        attn_weights =  matrix * self.head_dim_factor + attention_mask
         attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32)
         attn_output = torch.matmul(attn_weights, value_states)
         attn_output = attn_output.transpose(0, 1).contiguous().view(-1, self.hidden_size)
@@ -1546,23 +1641,21 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel, GenerationMixin):
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         kv_seq_len = ids_len + history_len
 
-        print('==debug')
-
-        ids_idx = torch.tensor(ids_len).item()
+        ids_idx = ids_len.item()
         history_idx = history_len.item()
         kv_idx = kv_seq_len.item()
 
-        torch._check(ids_idx > 0)
-        torch._check(ids_idx + history_idx > 1)
-        torch._check_is_size(ids_idx)
-        torch._check_is_size(history_idx)
-        torch._check_is_size(kv_idx)
-        torch._check(ids_idx < hidden_states.size(0))
-        torch._check(ids_idx < position_ids.size(2))
-        torch._check(history_idx < past_key_states.size(2))
-        torch._check(history_idx < past_value_states.size(2))
-        torch._check(ids_idx < self.attention_mask.size(1))
-        torch._check(kv_idx < self.attention_mask.size(2))
+        # torch._check(ids_idx > 0)
+        # torch._check(ids_idx + history_idx > 1)
+        # torch._check_is_size(ids_idx)
+        # torch._check_is_size(history_idx)
+        # torch._check_is_size(kv_idx)
+        # torch._check(ids_idx < hidden_states.size(0))
+        # torch._check(ids_idx < position_ids.size(2))
+        # torch._check(history_idx < past_key_states.size(2))
+        # torch._check(history_idx < past_value_states.size(2))
+        # torch._check(ids_idx < self.attention_mask.size(1))
+        # torch._check(kv_idx < self.attention_mask.size(2))
 
         # new guards
         # actual - Ne(128*u0 + 128*u1, 0)
@@ -1570,13 +1663,26 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel, GenerationMixin):
         # u1: history_idx
 
         # guard: Ne(0, 128*u0 + 128*u1))
-        torch._check((self.head_dim*ids_idx + self.head_dim*history_idx) != 0)
+        # torch._check((self.head_dim*ids_idx + self.head_dim*history_idx) != 0)
+
+        #  Ne(128*Max(1, u0 + u1), 128)
+        # torch._check((self.head_dim*max(1, ids_idx + history_idx)) != self.head_dim)
+
+        # Ne(128*Max(1, u0 + u1), 128*u0 + 128*u1)
+        # torch._check((self.head_dim*max(1, ids_idx + history_idx)) == self.head_dim*ids_idx + self.head_dim*history_idx)
 
         # guard: Ne(128 * Max(1, u0 + u1), 128)
-        torch._check(self.head_dim * max(1, ids_idx + history_idx) != self.head_dim)
+        print('check it yooooooo')
+        # torch._check(self.head_dim * max(1, ids_idx + history_idx) != self.head_dim)
 
         # guard: Ne(128*Max(1, u0 + u1), 128*u0 + 128*u1)
-        torch._check(self.head_dim * max(1, ids_idx + history_idx) != self.head_dim * ids_idx + self.head_dim * history_idx)
+        # print('head_dim', self.head_dim)
+        # print('ids_idx', ids_idx)
+        # print('history_idx',history_idx)
+        # print('max(1, ids_idx + history_idx)',max(1, ids_idx + history_idx))
+        # print('self.head_dim * max(1, ids_idx + history_idx)',self.head_dim * max(1, ids_idx + history_idx))
+        # print('self.head_dim * ids_idx + self.head_dim * history_id',self.head_dim * ids_idx + self.head_dim * history_idx)
+        # torch._check(self.head_dim * max(1, ids_idx + history_idx) != self.head_dim * ids_idx + self.head_dim * history_idx)
 
         torch._check((kv_seq_len > 0).item())
         torch._check(self.head_dim > 0)
