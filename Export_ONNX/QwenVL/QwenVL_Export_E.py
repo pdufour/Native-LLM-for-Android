@@ -36,60 +36,13 @@ shutil.copyfile("export_config.py", transformers_qwen2_path.replace("modeling_qw
 from transformers import Qwen2VLForConditionalGeneration, AutoTokenizer
 
 # Load the model
-
-print('version', torch.__version__)
 from torch._subclasses.fake_tensor import FakeTensorMode
 from torch.fx.experimental.symbolic_shapes import ShapeEnv
 
 import safetensors
 import transformers
 
-# Monkey-patch for https://github.com/huggingface/safetensors/pull/318
-class ONNXTorchPatcher:
-    def __init__(self):
-        def safetensors_load_file_wrapper(filename, device="cpu"):
-            result = {}
-            with safetensors.torch.safe_open(  # type: ignore[attr-defined]
-                filename, framework="pt", device=device
-            ) as f:
-                for k in f.keys():
-                    fake_mode = torch._guards.detect_fake_mode()
-                    if not fake_mode:
-                        result[k] = f.get_tensor(k)
-                    else:
-                        empty_tensor = f.get_slice(k)
-                        result[k] = torch.empty(
-                            tuple(empty_tensor.get_shape()),
-                            dtype=safetensors.torch._getdtype(
-                                empty_tensor.get_dtype()
-                            ),
-                        )
-            return result
-
-        self.safetensors_torch_load_file = safetensors.torch.load_file
-        self.safetensors_torch_load_file_wrapper = safetensors_load_file_wrapper
-        self.transformers_modeling_utils_safe_load_file = (
-            transformers.modeling_utils.safe_load_file
-        )
-
-    def __enter__(self):
-        safetensors.torch.load_file = self.safetensors_torch_load_file_wrapper
-        transformers.modeling_utils.safe_load_file = (
-            self.safetensors_torch_load_file_wrapper
-        )
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        safetensors.torch.load_file = self.safetensors_torch_load_file
-        transformers.modeling_utils.safe_load_file = (
-            self.transformers_modeling_utils_safe_load_file
-        )
-
-# with torch._subclasses.FakeTensorMode(shape_env=ShapeEnv(), export=True, allow_non_fake_inputs=True,), ONNXTorchPatcher():
-# with FakeTensorMode(shape_env=ShapeEnv(), export=True, allow_non_fake_inputs=True,):
 with torch.inference_mode():
-    # print('yo', torch.tensor(32.).item())
-    fake_mode = torch._guards.detect_fake_mode()
-    print('fake_mode', fake_mode)
     model = Qwen2VLForConditionalGeneration.from_pretrained(path, torch_dtype=torch.float32, low_cpu_mem_usage=False)
     max_seq_len = MAX_SEQ_LENGTH
     num_heads = model.config.num_attention_heads
@@ -110,8 +63,6 @@ with torch.inference_mode():
     kv_seq_len = ids_len + history_len
     attention_mask = torch.tensor([-65504.0], dtype=torch.float16)
     pos_factor = torch.tensor(0.0, dtype=torch.float16)
-
-    torch._constrain_as_size(ids_len.item(), 0, 5000)
 
     sqrt_hidden_size = torch.sqrt(torch.tensor(hidden_size, dtype=torch.float32))
     model.model.norm.weight.data *= sqrt_hidden_size
@@ -148,7 +99,7 @@ with torch.inference_mode():
         output_names=['max_logit_ids', 'past_key_states', 'past_value_states'],
         do_constant_folding=True,
         opset_version=20,
-        dynamo=True,
+        dynamo=False,
         strict=False,
     )
     del model

@@ -6,29 +6,17 @@ import onnx_graphsurgeon as gs
 import numpy
 from onnx import TensorProto
 
-def fix_argmax(graph):
-    for node in graph.nodes:
-        if node.op == "ArgMax":
-            # Create new int64 output variable
-            int64_var = gs.Variable(f"{node.name}_int64_output", dtype=numpy.int64)
-
-            cast_node = gs.Node("Cast",
-                        inputs=[int64_var],
-                        outputs=[node.outputs[0]],
-                        attrs={"to": TensorProto.INT64})
-
-            node.outputs = [int64_var]
-            graph.nodes.append(cast_node)
-
-    graph.cleanup().toposort()
-    return graph
-
+# Fixes this:
+#  Error: GPU validation error for kernel "[Concat] /Concat_9": The number of storage buffers (29) in the Compute stage exceeds the maximum per-stage limit (8).
+#  - While validating binding counts
+#  - While validating [BindGroupLayoutDescriptor]
+#  - While calling [Device].CreateComputePipeline([ComputePipelineDescriptor "Concat"]).
 def split_large_concat(graph):
     concat_nodes = [n for n in graph.nodes if n.op == "Concat" and len(n.inputs) > 8]
 
     for node in concat_nodes:
+        print('Splitting up node', node.name)
         inputs = list(node.inputs)
-        current = inputs[0:4]
         chain_outputs = []
 
         for i in range(0, len(inputs), 4):
@@ -48,7 +36,7 @@ def split_large_concat(graph):
         node.inputs = chain_outputs
         node.name = f"{node.name}_final"
 
-    graph = fix_argmax(graph)
+    print('Toposort')
     graph.cleanup().toposort()
     return graph
 
@@ -59,7 +47,9 @@ def main():
                        help='Overwrite the input file instead of creating a new one')
     args = parser.parse_args()
 
+    print('Loading model')
     model = onnx.load(args.input_model)
+    print('Loading graph')
     graph = gs.import_onnx(model)
     modified_graph = split_large_concat(graph)
 

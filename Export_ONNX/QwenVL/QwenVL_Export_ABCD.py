@@ -34,8 +34,8 @@ shutil.copyfile("export_config.py", transformers_qwen2_path.replace("modeling_qw
 from transformers import Qwen2VLForConditionalGeneration
 
 # make export directory "onnx" (clear out any existing path)
-shutil.rmtree(os.path.join(script_dir, 'onnx'), ignore_errors=True)
-os.makedirs(os.path.join(script_dir, 'onnx'))
+# shutil.rmtree(os.path.join(script_dir, 'onnx'), ignore_errors=True)
+# os.makedirs(os.path.join(script_dir, 'onnx'))
 
 def quantize_to_uint8(tensor, scale, zero_point):
     return ((tensor - zero_point) * scale).round().clamp(0, 255).to(torch.uint8)
@@ -164,22 +164,43 @@ with torch.inference_mode():
     embed_data = quantize_to_uint8(data, 1.0 / scale, zero_point)
 
     print('\nExport Part_A Start...')
+    # with torch.autocast('cpu', dtype=torch.float):
     # model = model.float()
 
-    # convert_layernorms_to_float32(model)
-    # convert_module_to_float32(model)
+        # convert_layernorms_to_float32(model)
+
+        # print(f"Model dtype: {next(model.parameters()).dtype}")
+        # print(f"Input dtype: {pixel_values.dtype}")
+
+        # for name, param in model.named_parameters():
+        #     if param.dtype != torch.float32:
+        #         print(f"Parameter {name} is not in float32, but in {param.dtype}")
+
+        # for name, buffer in model.named_buffers():
+        #     if buffer.dtype != torch.float32:
+        #         print(f"Buffer {name} is not in float32, but in {buffer.dtype}")
+
+        # convert_module_to_float32(model)
+
+        # for name, param in model.named_parameters():
+        #     if param.dtype != torch.float32:
+        #         print(f"Parameter {name} is not in float32, but in {param.dtype}")
+
+        # for name, buffer in model.named_buffers():
+        #     if buffer.dtype != torch.float32:
+        #         print(f"Buffer {name} is not in float32, but in {buffer.dtype}")
 
     torch.onnx.export(
         model,
-        (pixel_values),
+        (pixel_values.float(),),
         onnx_model_A,
         input_names=[
             'pixel_values'
         ],
         output_names=['image_embed'],
         do_constant_folding=True,
-        opset_version=20,
-        dynamo=True,
+        opset_version=19,
+        dynamo=False,
         verbose=True,
     )
     del model

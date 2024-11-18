@@ -81,7 +81,7 @@ print(f"[PATHS] Script directory: {script_dir}")
 
 # Define model paths
 modified_path_E = r'./modeling_modified/part_E/modeling_qwen2_vl.py'
-onnx_model_A = os.path.join(script_dir, 'onnx/QwenVL_A.onnx')
+onnx_model_A = os.path.join('/Users/paul.dufour/Nuber/Qwen2-VL-2B-Instruct-onnx/', 'onnx/QwenVL_A.onnx')
 onnx_model_B = os.path.join('/Users/paul.dufour/Nuber/Qwen2-VL-2B-Instruct-onnx/', 'onnx/QwenVL_B_q4f16.onnx')
 onnx_model_C = os.path.join('/Users/paul.dufour/Nuber/Qwen2-VL-2B-Instruct-onnx/', 'onnx/QwenVL_C_q4f16.onnx')
 onnx_model_D = os.path.join('/Users/paul.dufour/Nuber/Qwen2-VL-2B-Instruct-onnx/', 'onnx/QwenVL_D_q4f16.onnx')
@@ -96,7 +96,7 @@ print(f"  Model D: {onnx_model_D}")
 print(f"  Model E: {onnx_model_E}")
 
 # image_path = r"./psyduck.png"
-image_url = "http://localhost:3005/car_960.jpg"
+image_url = "http://localhost:3004/car_960.jpg"
 # image_url = "https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/transformers/tasks/car.jpg"
 query = "Describe this image."
 
