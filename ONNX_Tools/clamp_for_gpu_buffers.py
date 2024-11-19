@@ -48,7 +48,7 @@ def main():
     args = parser.parse_args()
 
     print('Loading model')
-    model = onnx.load(args.input_model)
+    model = onnx.load(args.input_model, load_external_data=True)
     print('Loading graph')
     graph = gs.import_onnx(model)
     modified_graph = split_large_concat(graph)

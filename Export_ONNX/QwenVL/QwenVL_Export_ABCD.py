@@ -142,7 +142,7 @@ with torch.inference_mode():
         ],
         output_names=['image_embed'],
         do_constant_folding=True,
-        opset_version=19,
+        opset_version=20,
         dynamo=False,
         verbose=True,
     )

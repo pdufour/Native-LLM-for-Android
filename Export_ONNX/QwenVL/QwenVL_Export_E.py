@@ -39,11 +39,10 @@ from transformers import Qwen2VLForConditionalGeneration, AutoTokenizer
 from torch._subclasses.fake_tensor import FakeTensorMode
 from torch.fx.experimental.symbolic_shapes import ShapeEnv
 
-import safetensors
 import transformers
 
 with torch.inference_mode():
-    model = Qwen2VLForConditionalGeneration.from_pretrained(path, torch_dtype=torch.float32, low_cpu_mem_usage=False)
+    model = Qwen2VLForConditionalGeneration.from_pretrained(path, torch_dtype=torch.float32, device_map="cpu", low_cpu_mem_usage=True)
     max_seq_len = MAX_SEQ_LENGTH
     num_heads = model.config.num_attention_heads
     num_key_value_heads = model.config.num_key_value_heads
@@ -100,7 +99,7 @@ with torch.inference_mode():
         do_constant_folding=True,
         opset_version=20,
         dynamo=False,
-        strict=False,
+        strict=True,
     )
     del model
     del hidden_states

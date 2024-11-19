@@ -1481,7 +1481,6 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel, GenerationMixin):
         expand_space = torch.zeros((self.num_layers, self.num_key_value_heads, self.max_seq_len - kv_seq_len, self.head_dim), dtype=torch.float16)
         return (
             torch.argmax(self.lm_head(self.model.norm(hidden_states[-1])).to(torch.int64)).int(),
-            torch.topk(self.lm_head(self.model.norm(hidden_states[-1])), k=1, dim=-1).indices.squeeze(-1).int(),
             torch.cat((torch.stack(self.save_key), expand_space), dim=-2),
             torch.cat((torch.stack(self.save_value), expand_space), dim=-2)
         )

@@ -1,3 +1,4 @@
 .DS_STORE
 Export_ONNX/QwenVL/onnx/
+Export_ONNX/QwenVL/onnx-dist/
 __pycache__
